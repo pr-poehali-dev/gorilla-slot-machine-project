@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import SlotMachine from '../components/SlotMachine';
 import Statistics from '../components/Statistics';
 import AgeVerification from '../components/AgeVerification';
+import PaymentSection from '../components/PaymentSection';
 
 const Index = () => {
   const [isVerified, setIsVerified] = useState(false);
@@ -31,6 +32,14 @@ const Index = () => {
       setBalance(prev => prev - amount);
       setTotalLosses(prev => prev + amount);
     }
+  };
+
+  const handleDeposit = (amount: number) => {
+    setBalance(prev => prev + amount);
+  };
+
+  const handleWithdraw = (amount: number) => {
+    setBalance(prev => prev - amount);
   };
 
   if (!isVerified) {
@@ -66,10 +75,17 @@ const Index = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Slot Machine */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-8">
             <SlotMachine 
               balance={balance}
               onGameResult={handleGameResult}
+            />
+            
+            {/* Payment Section */}
+            <PaymentSection 
+              balance={balance}
+              onDeposit={handleDeposit}
+              onWithdraw={handleWithdraw}
             />
           </div>
 
