@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Button } from './ui/button';
 import { useToast } from './ui/use-toast';
 import BonusGame from './BonusGame';
 
@@ -13,32 +12,31 @@ const BONUS_SYMBOL = '🐵';
 export default function SlotMachine({ balance, onGameResult }: SlotMachineProps) {
   const [reels, setReels] = useState(['🌴', '🦜', '🔔', '🌴', '🦜']);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [currentLine, setCurrentLine] = useState(1);
+  const [currentLine, setCurrentLine] = useState(9);
   const [bet, setBet] = useState(1);
   const [isDemoMode, setIsDemoMode] = useState(true);
   const [demoSpinsLeft, setDemoSpinsLeft] = useState(10);
   const [showBonusGame, setShowBonusGame] = useState(false);
   const [bonusBet, setBonusBet] = useState(0);
+  const [lastWin, setLastWin] = useState(0);
   const [totalSpins, setTotalSpins] = useState(0);
   const { toast } = useToast();
 
-  // RTP 85% - игрок проигрывает больше в долгосрочной перспективе
   const getRandomSymbol = () => {
     const random = Math.random();
-    if (random < 0.35) return '🌴'; // 35% низкооплачиваемый
-    if (random < 0.70) return '🦜'; // 35% низкооплачиваемый
-    if (random < 0.85) return '🔔'; // 15% средний
-    if (random < 0.93) return '🥥'; // 8% средний
-    if (random < 0.97) return '🍌'; // 4% высокооплачиваемый
-    if (random < 0.995) return '💎'; // 2.5% высокооплачиваемый
-    return '🐵'; // 0.5% бонус/джекпот
+    if (random < 0.35) return '🌴';
+    if (random < 0.70) return '🦜';
+    if (random < 0.85) return '🔔';
+    if (random < 0.93) return '🥥';
+    if (random < 0.97) return '🍌';
+    if (random < 0.995) return '💎';
+    return '🐵';
   };
 
   const calculateWin = (results: string[], totalBet: number): { amount: number; hasBonus: boolean } => {
     let totalWin = 0;
     let hasBonus = false;
 
-    // 15% шанс полностью обнулить выигрыш (house edge)
     if (Math.random() < 0.15) {
       return { amount: 0, hasBonus: false };
     }
@@ -49,7 +47,6 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
       totalWin = totalBet * 3;
     }
 
-    // 5 одинаковых (сниженные выплаты)
     if (results.every(r => r === results[0])) {
       if (results[0] === '🐵') return { amount: totalBet * 200, hasBonus };
       if (results[0] === '💎') return { amount: totalBet * 100, hasBonus };
@@ -58,7 +55,6 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
       return { amount: totalBet * 30, hasBonus };
     }
 
-    // 4 одинаковых
     const symbols4 = results.filter((s, i, arr) => arr.filter(x => x === s).length >= 4);
     if (symbols4.length >= 4) {
       const symbol = symbols4[0];
@@ -69,7 +65,6 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
       else totalWin += totalBet * 5;
     }
 
-    // 3 одинаковых
     const symbols3 = results.filter((s, i, arr) => arr.filter(x => x === s).length >= 3);
     if (symbols3.length >= 3 && totalWin === 0) {
       const symbol = symbols3[0];
@@ -80,7 +75,6 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
       else totalWin += totalBet * 2;
     }
 
-    // Периодическая "поддавка" для азарта
     if (totalSpins > 0 && totalSpins % 10 === 0 && Math.random() > 0.5) {
       totalWin = Math.max(totalWin, totalBet * 3);
     }
@@ -90,25 +84,19 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
 
   const spin = () => {
     if (isDemoMode && demoSpinsLeft === 0) {
-      toast({
-        title: "Демо-спины закончились",
-        description: "Переключитесь на реальный режим",
-        variant: "destructive"
-      });
+      toast({ title: "Демо закончилось", variant: "destructive" });
       return;
     }
 
     const totalBet = bet * currentLine;
     if (!isDemoMode && totalBet > balance) {
-      toast({
-        title: "Недостаточно средств",
-        variant: "destructive"
-      });
+      toast({ title: "Недостаточно средств", variant: "destructive" });
       return;
     }
 
     setIsSpinning(true);
     setTotalSpins(prev => prev + 1);
+    setLastWin(0);
 
     const spinInterval = setInterval(() => {
       setReels([getRandomSymbol(), getRandomSymbol(), getRandomSymbol(), getRandomSymbol(), getRandomSymbol()]);
@@ -121,6 +109,7 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
       setReels(finalReels);
       
       const { amount: winAmount, hasBonus } = calculateWin(finalReels, totalBet);
+      setLastWin(winAmount);
       
       if (isDemoMode) {
         setDemoSpinsLeft(prev => prev - 1);
@@ -132,25 +121,9 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
         }
         
         if (hasBonus) {
-          toast({
-            title: "🎰 БОНУСНАЯ ИГРА!",
-            description: `Выигрыш ${winAmount} ₽ + Бонус!`,
-            duration: 3000,
-          });
+          toast({ title: "БОНУС!", description: `${winAmount} + БОНУСНАЯ ИГРА` });
           setBonusBet(totalBet);
           setTimeout(() => setShowBonusGame(true), 1500);
-        } else if (winAmount >= totalBet * 50) {
-          toast({
-            title: "🎉 БОЛЬШОЙ ВЫИГРЫШ!",
-            description: `${winAmount} ₽`,
-            duration: 4000,
-          });
-        } else {
-          toast({
-            title: "Выигрыш",
-            description: `${winAmount} ₽`,
-            duration: 2000,
-          });
         }
       } else {
         if (!isDemoMode) {
@@ -167,21 +140,7 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
     if (!isDemoMode && bonusWin > 0) {
       onGameResult(true, bonusWin);
     }
-    
-    if (bonusWin > 0) {
-      toast({
-        title: "Бонус завершён",
-        description: `${bonusWin} ₽`,
-        duration: 3000,
-      });
-    }
-  };
-
-  const toggleMode = () => {
-    if (isDemoMode && demoSpinsLeft === 0) {
-      setDemoSpinsLeft(10);
-    }
-    setIsDemoMode(!isDemoMode);
+    setLastWin(bonusWin);
   };
 
   if (showBonusGame) {
@@ -191,140 +150,346 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
   const totalBet = bet * currentLine;
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-2 sm:px-4">
-      <div className="relative bg-gradient-to-b from-orange-900 via-orange-800 to-orange-900 rounded-xl sm:rounded-2xl border-4 sm:border-8 border-yellow-600 shadow-2xl overflow-hidden">
-        <div className="absolute inset-0 border-2 sm:border-4 border-yellow-500/30 pointer-events-none"></div>
+    <div className="w-full max-w-5xl mx-auto p-2">
+      {/* ТОЧНАЯ КОПИЯ CRAZY MONKEY */}
+      <div className="relative" style={{ 
+        background: 'linear-gradient(180deg, #8B4513 0%, #654321 50%, #8B4513 100%)',
+        borderRadius: '20px',
+        border: '12px solid #DAA520',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.8), inset 0 0 30px rgba(0,0,0,0.5)'
+      }}>
         
-        {/* Заголовок */}
-        <div className="relative bg-gradient-to-b from-red-700 to-red-900 py-3 sm:py-4 px-4 sm:px-6 border-b-2 sm:border-b-4 border-yellow-600">
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-2 sm:gap-3 mb-1 sm:mb-2">
-              <span className="text-3xl sm:text-5xl">🐵</span>
-              <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-yellow-300 tracking-wider drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)]" style={{ fontFamily: 'Impact, sans-serif', textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000' }}>
-                CRAZY MONKEY
-              </h1>
-              <span className="text-3xl sm:text-5xl">🍌</span>
-            </div>
+        {/* ВЕРХНЯЯ ДЕКОРАТИВНАЯ ПАНЕЛЬ */}
+        <div style={{
+          background: 'linear-gradient(180deg, #B8860B 0%, #8B6914 100%)',
+          padding: '10px',
+          borderRadius: '8px 8px 0 0',
+          borderBottom: '4px solid #654321'
+        }}>
+          <div className="flex items-center justify-center gap-2">
+            <div style={{ 
+              background: 'radial-gradient(circle, #FF6B00 0%, #CC5500 100%)',
+              width: '30px',
+              height: '30px',
+              borderRadius: '50%',
+              border: '3px solid #8B4513',
+              boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.5)'
+            }}></div>
+            <div style={{ 
+              background: 'radial-gradient(circle, #FFD700 0%, #FFA500 100%)',
+              width: '30px',
+              height: '30px',
+              borderRadius: '50%',
+              border: '3px solid #8B4513',
+              boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.5)'
+            }}></div>
+            <div style={{ 
+              background: 'radial-gradient(circle, #00FF00 0%, #00AA00 100%)',
+              width: '30px',
+              height: '30px',
+              borderRadius: '50%',
+              border: '3px solid #8B4513',
+              boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.5)'
+            }}></div>
           </div>
         </div>
 
-        {/* Основная область */}
-        <div className="p-3 sm:p-6">
-          {/* Барабаны */}
-          <div className="relative mb-4 sm:mb-6">
-            <div className="bg-gradient-to-b from-blue-950 to-blue-900 p-1.5 sm:p-2 rounded-lg sm:rounded-xl border-2 sm:border-4 border-blue-800 shadow-inner">
-              <div className="grid grid-cols-5 gap-1 sm:gap-2">
-                {reels.map((symbol, index) => (
-                  <div
-                    key={index}
-                    className={`aspect-square bg-gradient-to-b from-slate-200 to-slate-100 rounded border-2 sm:border-4 border-slate-300 flex items-center justify-center shadow-lg ${
-                      isSpinning ? 'animate-bounce' : ''
-                    }`}
-                  >
-                    <span className={`text-3xl sm:text-5xl md:text-7xl ${isSpinning ? 'blur-sm' : ''} transition-all`}>
-                      {symbol}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {/* ЛОГОТИП */}
+        <div style={{
+          background: 'linear-gradient(180deg, #8B0000 0%, #660000 100%)',
+          padding: '15px',
+          textAlign: 'center',
+          borderBottom: '6px solid #8B6914',
+          position: 'relative'
+        }}>
+          <div className="flex items-center justify-center gap-3">
+            <span style={{ fontSize: '50px' }}>🐵</span>
+            <h1 style={{
+              fontFamily: 'Impact, Arial Black, sans-serif',
+              fontSize: 'clamp(24px, 6vw, 48px)',
+              fontWeight: '900',
+              color: '#FFD700',
+              textShadow: '4px 4px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 0 20px #FF6B00',
+              letterSpacing: '3px',
+              textTransform: 'uppercase'
+            }}>
+              CRAZY MONKEY
+            </h1>
+            <span style={{ fontSize: '50px' }}>🍌</span>
+          </div>
+        </div>
 
-            <div className="absolute -left-1 sm:-left-2 top-1/2 -translate-y-1/2 bg-yellow-500 text-slate-900 font-black px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-xs sm:text-sm">
+        <div className="p-4">
+          {/* ИГРОВОЕ ПОЛЕ С БАРАБАНАМИ */}
+          <div style={{
+            background: 'linear-gradient(180deg, #001a33 0%, #000d1a 100%)',
+            padding: '15px',
+            borderRadius: '15px',
+            border: '6px solid #003366',
+            boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.9)',
+            marginBottom: '15px',
+            position: 'relative'
+          }}>
+            {/* ИНДИКАТОР ЛИНИЙ СЛЕВА */}
+            <div style={{
+              position: 'absolute',
+              left: '-8px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'linear-gradient(180deg, #FFD700 0%, #FFA500 100%)',
+              padding: '8px 6px',
+              borderRadius: '8px',
+              border: '3px solid #8B6914',
+              fontWeight: '900',
+              fontSize: '20px',
+              color: '#000',
+              boxShadow: '0 4px 10px rgba(0,0,0,0.8)'
+            }}>
               {currentLine}
             </div>
+
+            {/* БАРАБАНЫ */}
+            <div className="grid grid-cols-5 gap-2">
+              {reels.map((symbol, index) => (
+                <div
+                  key={index}
+                  style={{
+                    aspectRatio: '1',
+                    background: 'linear-gradient(180deg, #f0f0f0 0%, #d0d0d0 100%)',
+                    border: '5px solid #a0a0a0',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: 'inset 0 4px 10px rgba(0,0,0,0.3), 0 4px 10px rgba(255,255,255,0.2)',
+                    position: 'relative'
+                  }}
+                  className={isSpinning ? 'animate-bounce' : ''}
+                >
+                  <span style={{
+                    fontSize: 'clamp(40px, 8vw, 80px)',
+                    filter: isSpinning ? 'blur(8px)' : 'none',
+                    transition: 'filter 0.3s'
+                  }}>
+                    {symbol}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Панель управления */}
-          <div className="bg-gradient-to-b from-slate-700 to-slate-800 rounded-lg sm:rounded-xl border-2 sm:border-4 border-slate-600 p-2 sm:p-4 mb-3 sm:mb-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3 mb-2 sm:mb-3">
-              <div className="bg-black rounded px-2 sm:px-3 py-1.5 sm:py-2 border border-red-600">
-                <div className="text-red-500 text-[10px] sm:text-xs font-bold">КРЕДИТ</div>
-                <div className="text-yellow-400 text-base sm:text-xl font-black">{balance}</div>
+          {/* ПАНЕЛЬ УПРАВЛЕНИЯ - ОРИГИНАЛ */}
+          <div style={{
+            background: 'linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 100%)',
+            padding: '15px',
+            borderRadius: '12px',
+            border: '4px solid #1a1a1a',
+            marginBottom: '15px'
+          }}>
+            {/* ДИСПЛЕИ */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+              <div style={{
+                background: '#000',
+                border: '3px solid #8B0000',
+                borderRadius: '8px',
+                padding: '8px',
+                textAlign: 'center'
+              }}>
+                <div style={{ color: '#8B0000', fontSize: '10px', fontWeight: 'bold' }}>CREDIT</div>
+                <div style={{ color: '#FFD700', fontSize: 'clamp(16px, 4vw, 24px)', fontWeight: '900', fontFamily: 'Digital, monospace' }}>
+                  {balance}
+                </div>
               </div>
 
-              <div className="bg-black rounded px-2 sm:px-3 py-1.5 sm:py-2 border border-red-600">
-                <div className="text-red-500 text-[10px] sm:text-xs font-bold">СТАВКА</div>
-                <div className="text-yellow-400 text-base sm:text-xl font-black">{bet}</div>
+              <div style={{
+                background: '#000',
+                border: '3px solid #8B0000',
+                borderRadius: '8px',
+                padding: '8px',
+                textAlign: 'center'
+              }}>
+                <div style={{ color: '#8B0000', fontSize: '10px', fontWeight: 'bold' }}>BET</div>
+                <div style={{ color: '#FFD700', fontSize: 'clamp(16px, 4vw, 24px)', fontWeight: '900', fontFamily: 'Digital, monospace' }}>
+                  {bet}
+                </div>
               </div>
 
-              <div className="bg-black rounded px-2 sm:px-3 py-1.5 sm:py-2 border border-red-600">
-                <div className="text-red-500 text-[10px] sm:text-xs font-bold">ЛИНИИ</div>
-                <div className="text-yellow-400 text-base sm:text-xl font-black">{currentLine}</div>
+              <div style={{
+                background: '#000',
+                border: '3px solid #8B0000',
+                borderRadius: '8px',
+                padding: '8px',
+                textAlign: 'center'
+              }}>
+                <div style={{ color: '#8B0000', fontSize: '10px', fontWeight: 'bold' }}>LINES</div>
+                <div style={{ color: '#FFD700', fontSize: 'clamp(16px, 4vw, 24px)', fontWeight: '900', fontFamily: 'Digital, monospace' }}>
+                  {currentLine}
+                </div>
               </div>
 
-              <div className="bg-black rounded px-2 sm:px-3 py-1.5 sm:py-2 border border-red-600">
-                <div className="text-red-500 text-[10px] sm:text-xs font-bold">ВСЕГО</div>
-                <div className="text-yellow-400 text-base sm:text-xl font-black">{totalBet}</div>
+              <div style={{
+                background: '#000',
+                border: '3px solid #8B0000',
+                borderRadius: '8px',
+                padding: '8px',
+                textAlign: 'center'
+              }}>
+                <div style={{ color: '#8B0000', fontSize: '10px', fontWeight: 'bold' }}>WIN</div>
+                <div style={{ color: '#00FF00', fontSize: 'clamp(16px, 4vw, 24px)', fontWeight: '900', fontFamily: 'Digital, monospace' }}>
+                  {lastWin}
+                </div>
+              </div>
+
+              <div style={{
+                background: '#000',
+                border: '3px solid #8B0000',
+                borderRadius: '8px',
+                padding: '8px',
+                textAlign: 'center'
+              }}>
+                <div style={{ color: '#8B0000', fontSize: '10px', fontWeight: 'bold' }}>TOTAL BET</div>
+                <div style={{ color: '#FFD700', fontSize: 'clamp(16px, 4vw, 24px)', fontWeight: '900', fontFamily: 'Digital, monospace' }}>
+                  {totalBet}
+                </div>
               </div>
             </div>
 
-            {/* Кнопки */}
-            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-2">
-              <Button
+            {/* КНОПКИ УПРАВЛЕНИЯ */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button
                 onClick={() => setBet(Math.max(1, bet - 1))}
                 disabled={isSpinning}
-                className="bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-black border-2 sm:border-4 border-red-900 shadow-lg py-4 sm:py-6 text-xs sm:text-base h-auto"
+                style={{
+                  background: 'linear-gradient(180deg, #CC0000 0%, #880000 100%)',
+                  border: '4px solid #660000',
+                  borderRadius: '10px',
+                  padding: '15px',
+                  color: '#FFF',
+                  fontWeight: '900',
+                  fontSize: 'clamp(12px, 3vw, 16px)',
+                  boxShadow: '0 6px 0 #440000, 0 8px 15px rgba(0,0,0,0.5)',
+                  cursor: isSpinning ? 'not-allowed' : 'pointer',
+                  opacity: isSpinning ? 0.5 : 1,
+                  textShadow: '2px 2px 4px #000',
+                  transition: 'all 0.1s'
+                }}
+                onMouseDown={(e) => !isSpinning && (e.currentTarget.style.transform = 'translateY(4px)')}
+                onMouseUp={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
               >
-                БЕТ -
-              </Button>
-              
-              <Button
+                BET -
+              </button>
+
+              <button
                 onClick={() => setBet(Math.min(10, bet + 1))}
                 disabled={isSpinning}
-                className="bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-black border-2 sm:border-4 border-red-900 shadow-lg py-4 sm:py-6 text-xs sm:text-base h-auto"
+                style={{
+                  background: 'linear-gradient(180deg, #CC0000 0%, #880000 100%)',
+                  border: '4px solid #660000',
+                  borderRadius: '10px',
+                  padding: '15px',
+                  color: '#FFF',
+                  fontWeight: '900',
+                  fontSize: 'clamp(12px, 3vw, 16px)',
+                  boxShadow: '0 6px 0 #440000, 0 8px 15px rgba(0,0,0,0.5)',
+                  cursor: isSpinning ? 'not-allowed' : 'pointer',
+                  opacity: isSpinning ? 0.5 : 1,
+                  textShadow: '2px 2px 4px #000'
+                }}
+                onMouseDown={(e) => !isSpinning && (e.currentTarget.style.transform = 'translateY(4px)')}
+                onMouseUp={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
               >
-                БЕТ +
-              </Button>
+                BET +
+              </button>
 
-              <Button
+              <button
                 onClick={() => setCurrentLine(currentLine === 9 ? 1 : currentLine + 1)}
                 disabled={isSpinning}
-                className="bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white font-black border-2 sm:border-4 border-blue-900 shadow-lg py-4 sm:py-6 text-xs sm:text-base h-auto"
+                style={{
+                  background: 'linear-gradient(180deg, #0066CC 0%, #004488 100%)',
+                  border: '4px solid #003366',
+                  borderRadius: '10px',
+                  padding: '15px',
+                  color: '#FFF',
+                  fontWeight: '900',
+                  fontSize: 'clamp(12px, 3vw, 16px)',
+                  boxShadow: '0 6px 0 #002244, 0 8px 15px rgba(0,0,0,0.5)',
+                  cursor: isSpinning ? 'not-allowed' : 'pointer',
+                  opacity: isSpinning ? 0.5 : 1,
+                  textShadow: '2px 2px 4px #000'
+                }}
+                onMouseDown={(e) => !isSpinning && (e.currentTarget.style.transform = 'translateY(4px)')}
+                onMouseUp={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
               >
-                ЛИНИЯ
-              </Button>
-            </div>
-
-            <Button
-              onClick={spin}
-              disabled={isSpinning || (!isDemoMode && totalBet > balance) || (isDemoMode && demoSpinsLeft === 0)}
-              className="w-full bg-gradient-to-b from-green-600 to-green-800 hover:from-green-500 hover:to-green-700 text-white font-black text-lg sm:text-2xl border-2 sm:border-4 border-green-900 shadow-lg py-5 sm:py-7 animate-pulse h-auto"
-            >
-              {isSpinning ? 'КРУТИМ...' : 'СТАРТ'}
-            </Button>
-          </div>
-
-          {/* Режим */}
-          <div className="bg-slate-800 rounded-lg p-2 sm:p-3 border border-slate-600 mb-3 sm:mb-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <button
-                onClick={toggleMode}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded font-bold text-xs sm:text-base ${
-                  isDemoMode ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
-                }`}
-              >
-                {isDemoMode ? `ДЕМО (${demoSpinsLeft})` : 'РЕАЛЬНЫЙ'}
+                LINES
               </button>
-              {isDemoMode && demoSpinsLeft === 0 && (
-                <button 
-                  onClick={() => setDemoSpinsLeft(10)}
-                  className="px-2 sm:px-3 py-1 bg-blue-500 text-white rounded text-xs sm:text-sm font-bold"
-                >
-                  Обновить
-                </button>
-              )}
+
+              <button
+                onClick={spin}
+                disabled={isSpinning || (!isDemoMode && totalBet > balance) || (isDemoMode && demoSpinsLeft === 0)}
+                style={{
+                  background: isSpinning 
+                    ? 'linear-gradient(180deg, #666 0%, #444 100%)'
+                    : 'linear-gradient(180deg, #00CC00 0%, #008800 100%)',
+                  border: '4px solid ' + (isSpinning ? '#333' : '#006600'),
+                  borderRadius: '10px',
+                  padding: '15px',
+                  color: '#FFF',
+                  fontWeight: '900',
+                  fontSize: 'clamp(16px, 4vw, 24px)',
+                  boxShadow: isSpinning ? 'none' : '0 6px 0 #004400, 0 8px 15px rgba(0,0,0,0.5)',
+                  cursor: (isSpinning || (!isDemoMode && totalBet > balance) || (isDemoMode && demoSpinsLeft === 0)) ? 'not-allowed' : 'pointer',
+                  textShadow: '3px 3px 6px #000',
+                  gridColumn: 'span 4'
+                }}
+                onMouseDown={(e) => !isSpinning && (e.currentTarget.style.transform = 'translateY(4px)')}
+                onMouseUp={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+              >
+                {isSpinning ? '⚡ SPINNING... ⚡' : '▶ START ◀'}
+              </button>
             </div>
           </div>
 
-          {/* Таблица */}
-          <div className="bg-slate-900 rounded-lg p-2 sm:p-3 border border-yellow-600">
-            <div className="text-yellow-400 font-black text-xs sm:text-sm mb-1.5 sm:mb-2">ВЫПЛАТЫ:</div>
-            <div className="grid grid-cols-2 gap-0.5 sm:gap-1 text-[10px] sm:text-sm text-white">
-              <div>🐵×5=×200</div>
-              <div>💎×5=×100</div>
-              <div>🍌×5=×80</div>
-              <div>🥥×5=×50</div>
-              <div className="col-span-2 text-center text-green-400 font-bold text-xs sm:text-sm mt-1">🐵×3=БОНУС</div>
+          {/* РЕЖИМ + ИНФО */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div style={{
+              background: '#1a1a1a',
+              padding: '10px',
+              borderRadius: '8px',
+              border: '2px solid #444'
+            }}>
+              <button
+                onClick={() => {
+                  if (isDemoMode && demoSpinsLeft === 0) setDemoSpinsLeft(10);
+                  setIsDemoMode(!isDemoMode);
+                }}
+                style={{
+                  width: '100%',
+                  background: isDemoMode ? 'linear-gradient(180deg, #0088FF 0%, #0066CC 100%)' : 'linear-gradient(180deg, #00CC00 0%, #008800 100%)',
+                  border: '3px solid ' + (isDemoMode ? '#0055AA' : '#006600'),
+                  borderRadius: '8px',
+                  padding: '12px',
+                  color: '#FFF',
+                  fontWeight: '900',
+                  fontSize: 'clamp(12px, 3vw, 16px)',
+                  boxShadow: '0 4px 0 ' + (isDemoMode ? '#003366' : '#004400')
+                }}
+              >
+                {isDemoMode ? `🎮 DEMO (${demoSpinsLeft} spins)` : '💰 REAL MODE'}
+              </button>
+            </div>
+
+            <div style={{
+              background: '#1a1a1a',
+              padding: '10px',
+              borderRadius: '8px',
+              border: '2px solid #8B6914',
+              color: '#FFD700',
+              fontSize: 'clamp(10px, 2.5vw, 14px)',
+              textAlign: 'center',
+              fontWeight: 'bold'
+            }}>
+              🐵×5=×200 | 💎×5=×100 | 🍌×5=×80<br/>
+              <span style={{ color: '#00FF00' }}>🐵×3 = BONUS GAME!</span>
             </div>
           </div>
         </div>
