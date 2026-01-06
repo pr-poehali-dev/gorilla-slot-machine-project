@@ -1,11 +1,6 @@
 import { useState } from 'react';
 import { Button } from './ui/button';
-import { Card } from './ui/card';
-import { Slider } from './ui/slider';
 import { useToast } from './ui/use-toast';
-import { Switch } from './ui/switch';
-import { Label } from './ui/label';
-import Icon from './ui/icon';
 import BonusGame from './BonusGame';
 
 interface SlotMachineProps {
@@ -13,96 +8,111 @@ interface SlotMachineProps {
   onGameResult: (won: boolean, amount: number) => void;
 }
 
-// Crazy Monkey symbols
-const symbols = ['🐵', '🍌', '🥥', '🌴', '🦜', '💎'];
 const BONUS_SYMBOL = '🐵';
-const SCATTER_SYMBOL = '🍌';
 
 export default function SlotMachine({ balance, onGameResult }: SlotMachineProps) {
-  const [reels, setReels] = useState(['🐵', '🐵', '🐵', '🐵', '🐵']);
+  const [reels, setReels] = useState(['🌴', '🦜', '🔔', '🌴', '🦜']);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [bet, setBet] = useState(100);
+  const [currentLine, setCurrentLine] = useState(1);
+  const [bet, setBet] = useState(1);
   const [isDemoMode, setIsDemoMode] = useState(true);
   const [demoSpinsLeft, setDemoSpinsLeft] = useState(10);
   const [showBonusGame, setShowBonusGame] = useState(false);
   const [bonusBet, setBonusBet] = useState(0);
+  const [totalSpins, setTotalSpins] = useState(0);
   const { toast } = useToast();
 
-  const getRandomSymbol = () => symbols[Math.floor(Math.random() * symbols.length)];
+  // RTP 85% - игрок проигрывает больше в долгосрочной перспективе
+  const getRandomSymbol = () => {
+    const random = Math.random();
+    if (random < 0.35) return '🌴'; // 35% низкооплачиваемый
+    if (random < 0.70) return '🦜'; // 35% низкооплачиваемый
+    if (random < 0.85) return '🔔'; // 15% средний
+    if (random < 0.93) return '🥥'; // 8% средний
+    if (random < 0.97) return '🍌'; // 4% высокооплачиваемый
+    if (random < 0.995) return '💎'; // 2.5% высокооплачиваемый
+    return '🐵'; // 0.5% бонус/джекпот
+  };
 
-  // Crazy Monkey winning logic - 5 reels, 9 paylines
-  const calculateWin = (results: string[]): { amount: number; hasBonus: boolean } => {
+  const calculateWin = (results: string[], totalBet: number): { amount: number; hasBonus: boolean } => {
     let totalWin = 0;
     let hasBonus = false;
 
-    // Check for 3+ Bonus symbols (Monkeys) - triggers bonus game
+    // 15% шанс полностью обнулить выигрыш (house edge)
+    if (Math.random() < 0.15) {
+      return { amount: 0, hasBonus: false };
+    }
+
     const monkeyCount = results.filter(r => r === BONUS_SYMBOL).length;
     if (monkeyCount >= 3) {
       hasBonus = true;
-      totalWin = bet * 10; // Base win for bonus trigger
+      totalWin = totalBet * 3;
     }
 
-    // 5 of a kind
+    // 5 одинаковых (сниженные выплаты)
     if (results.every(r => r === results[0])) {
-      if (results[0] === BONUS_SYMBOL) return { amount: bet * 500, hasBonus }; // Monkey
-      if (results[0] === SCATTER_SYMBOL) return { amount: bet * 200, hasBonus }; // Banana
-      if (results[0] === '💎') return { amount: bet * 150, hasBonus }; // Diamond
-      return { amount: bet * 100, hasBonus };
+      if (results[0] === '🐵') return { amount: totalBet * 200, hasBonus };
+      if (results[0] === '💎') return { amount: totalBet * 100, hasBonus };
+      if (results[0] === '🍌') return { amount: totalBet * 80, hasBonus };
+      if (results[0] === '🥥') return { amount: totalBet * 50, hasBonus };
+      return { amount: totalBet * 30, hasBonus };
     }
 
-    // 4 of a kind
+    // 4 одинаковых
     const symbols4 = results.filter((s, i, arr) => arr.filter(x => x === s).length >= 4);
     if (symbols4.length >= 4) {
       const symbol = symbols4[0];
-      if (symbol === BONUS_SYMBOL) totalWin += bet * 100;
-      else if (symbol === SCATTER_SYMBOL) totalWin += bet * 50;
-      else if (symbol === '💎') totalWin += bet * 40;
-      else totalWin += bet * 25;
+      if (symbol === '🐵') totalWin += totalBet * 40;
+      else if (symbol === '💎') totalWin += totalBet * 20;
+      else if (symbol === '🍌') totalWin += totalBet * 15;
+      else if (symbol === '🥥') totalWin += totalBet * 10;
+      else totalWin += totalBet * 5;
     }
 
-    // 3 of a kind
+    // 3 одинаковых
     const symbols3 = results.filter((s, i, arr) => arr.filter(x => x === s).length >= 3);
     if (symbols3.length >= 3 && totalWin === 0) {
       const symbol = symbols3[0];
-      if (symbol === BONUS_SYMBOL) totalWin += bet * 25;
-      else if (symbol === SCATTER_SYMBOL) totalWin += bet * 15;
-      else if (symbol === '💎') totalWin += bet * 10;
-      else totalWin += bet * 5;
+      if (symbol === '🐵') totalWin += totalBet * 10;
+      else if (symbol === '💎') totalWin += totalBet * 6;
+      else if (symbol === '🍌') totalWin += totalBet * 5;
+      else if (symbol === '🥥') totalWin += totalBet * 3;
+      else totalWin += totalBet * 2;
     }
 
-    // 3+ Scatter symbols (Bananas) - free spins multiplier
-    const bananaCount = results.filter(r => r === SCATTER_SYMBOL).length;
-    if (bananaCount >= 3) {
-      totalWin += bet * (bananaCount * 5);
+    // Периодическая "поддавка" для азарта
+    if (totalSpins > 0 && totalSpins % 10 === 0 && Math.random() > 0.5) {
+      totalWin = Math.max(totalWin, totalBet * 3);
     }
 
-    return { amount: totalWin, hasBonus };
+    return { amount: Math.floor(totalWin), hasBonus };
   };
 
   const spin = () => {
     if (isDemoMode && demoSpinsLeft === 0) {
       toast({
         title: "Демо-спины закончились",
-        description: "Переключитесь на реальный режим для продолжения игры",
+        description: "Переключитесь на реальный режим",
         variant: "destructive"
       });
       return;
     }
 
-    if (!isDemoMode && bet > balance) {
+    const totalBet = bet * currentLine;
+    if (!isDemoMode && totalBet > balance) {
       toast({
         title: "Недостаточно средств",
-        description: "Пополните баланс или уменьшите ставку",
         variant: "destructive"
       });
       return;
     }
 
     setIsSpinning(true);
+    setTotalSpins(prev => prev + 1);
 
     const spinInterval = setInterval(() => {
       setReels([getRandomSymbol(), getRandomSymbol(), getRandomSymbol(), getRandomSymbol(), getRandomSymbol()]);
-    }, 100);
+    }, 80);
 
     setTimeout(() => {
       clearInterval(spinInterval);
@@ -110,7 +120,7 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
       const finalReels = [getRandomSymbol(), getRandomSymbol(), getRandomSymbol(), getRandomSymbol(), getRandomSymbol()];
       setReels(finalReels);
       
-      const { amount: winAmount, hasBonus } = calculateWin(finalReels);
+      const { amount: winAmount, hasBonus } = calculateWin(finalReels, totalBet);
       
       if (isDemoMode) {
         setDemoSpinsLeft(prev => prev - 1);
@@ -121,41 +131,35 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
           onGameResult(true, winAmount);
         }
         
-        const monkeyCount = finalReels.filter(r => r === BONUS_SYMBOL).length;
-        if (monkeyCount === 5) {
+        if (hasBonus) {
           toast({
-            title: "🎉🐵 CRAZY JACKPOT! 🐵🎉",
-            description: isDemoMode 
-              ? `Демо-выигрыш: ${winAmount.toLocaleString('ru-RU')} ₽!`
-              : `БЕЗУМИЕ! Вы выиграли ${winAmount.toLocaleString('ru-RU')} ₽!`,
-            duration: 5000,
+            title: "🎰 БОНУСНАЯ ИГРА!",
+            description: `Выигрыш ${winAmount} ₽ + Бонус!`,
+            duration: 3000,
           });
-        } else if (hasBonus) {
+          setBonusBet(totalBet);
+          setTimeout(() => setShowBonusGame(true), 1500);
+        } else if (winAmount >= totalBet * 50) {
           toast({
-            title: "🎰 БОНУСНАЯ ИГРА! 🐵",
-            description: isDemoMode
-              ? `Демо-выигрыш: ${winAmount.toLocaleString('ru-RU')} ₽ + Бонус!`
-              : `Выигрыш ${winAmount.toLocaleString('ru-RU')} ₽ + Бонусная игра!`,
+            title: "🎉 БОЛЬШОЙ ВЫИГРЫШ!",
+            description: `${winAmount} ₽`,
             duration: 4000,
           });
-          setBonusBet(bet);
-          setTimeout(() => setShowBonusGame(true), 2000);
         } else {
           toast({
-            title: "🎊 Выигрыш!",
-            description: isDemoMode
-              ? `Демо-выигрыш: ${winAmount.toLocaleString('ru-RU')} ₽`
-              : `Вы выиграли ${winAmount.toLocaleString('ru-RU')} ₽`,
+            title: "Выигрыш",
+            description: `${winAmount} ₽`,
+            duration: 2000,
           });
         }
       } else {
         if (!isDemoMode) {
-          onGameResult(false, bet);
+          onGameResult(false, totalBet);
         }
       }
       
       setIsSpinning(false);
-    }, 2500);
+    }, 2000);
   };
 
   const handleBonusComplete = (bonusWin: number) => {
@@ -166,11 +170,9 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
     
     if (bonusWin > 0) {
       toast({
-        title: "🎉 Бонус завершён!",
-        description: isDemoMode
-          ? `Бонус-выигрыш: ${bonusWin.toLocaleString('ru-RU')} ₽`
-          : `Вы выиграли в бонусной игре: ${bonusWin.toLocaleString('ru-RU')} ₽!`,
-        duration: 5000,
+        title: "Бонус завершён",
+        description: `${bonusWin} ₽`,
+        duration: 3000,
       });
     }
   };
@@ -186,202 +188,147 @@ export default function SlotMachine({ balance, onGameResult }: SlotMachineProps)
     return <BonusGame bet={bonusBet} isDemoMode={isDemoMode} onComplete={handleBonusComplete} />;
   }
 
+  const totalBet = bet * currentLine;
+
   return (
-    <Card className="relative overflow-hidden bg-gradient-to-br from-green-900 via-yellow-900 to-orange-900 border-4 border-yellow-600 shadow-2xl">
-      {/* Jungle background */}
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute inset-0" style={{
-          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(34, 197, 94, 0.3) 10px, rgba(34, 197, 94, 0.3) 20px)',
-        }}></div>
-      </div>
-
-      <div className="relative p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="text-center flex-1">
-            <div className="flex items-center justify-center gap-3 mb-3">
-              <div className="text-6xl animate-bounce">🐵</div>
-              <div className="text-4xl">🍌</div>
-              <div className="text-6xl animate-bounce" style={{ animationDelay: '0.2s' }}>🐵</div>
+    <div className="w-full max-w-4xl mx-auto px-2 sm:px-4">
+      <div className="relative bg-gradient-to-b from-orange-900 via-orange-800 to-orange-900 rounded-xl sm:rounded-2xl border-4 sm:border-8 border-yellow-600 shadow-2xl overflow-hidden">
+        <div className="absolute inset-0 border-2 sm:border-4 border-yellow-500/30 pointer-events-none"></div>
+        
+        {/* Заголовок */}
+        <div className="relative bg-gradient-to-b from-red-700 to-red-900 py-3 sm:py-4 px-4 sm:px-6 border-b-2 sm:border-b-4 border-yellow-600">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 sm:gap-3 mb-1 sm:mb-2">
+              <span className="text-3xl sm:text-5xl">🐵</span>
+              <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-yellow-300 tracking-wider drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)]" style={{ fontFamily: 'Impact, sans-serif', textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000' }}>
+                CRAZY MONKEY
+              </h1>
+              <span className="text-3xl sm:text-5xl">🍌</span>
             </div>
-            <h2 className="text-5xl font-black bg-gradient-to-r from-yellow-300 via-orange-400 to-red-500 bg-clip-text text-transparent mb-2 drop-shadow-lg" style={{ fontFamily: 'Playfair Display, serif' }}>
-              CRAZY MONKEY
-            </h2>
-            <p className="text-yellow-300 text-lg font-bold drop-shadow-md">Легендарный игровой автомат</p>
           </div>
         </div>
 
-        {/* Mode Switch */}
-        <div className="mb-6 p-4 bg-gradient-to-r from-green-800/80 to-green-700/80 rounded-xl border-2 border-green-500/50 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Switch 
-                id="mode-switch" 
-                checked={!isDemoMode}
-                onCheckedChange={toggleMode}
-                className="data-[state=checked]:bg-green-600"
-              />
-              <Label htmlFor="mode-switch" className="cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <Icon name={isDemoMode ? "Eye" : "DollarSign"} size={20} className={isDemoMode ? "text-blue-300" : "text-green-300"} />
-                  <div>
-                    <div className={`font-semibold ${isDemoMode ? "text-blue-200" : "text-green-200"}`}>
-                      {isDemoMode ? "Демо-режим" : "Реальный режим"}
-                    </div>
-                    <div className="text-xs text-yellow-200">
-                      {isDemoMode ? `Осталось спинов: ${demoSpinsLeft}` : "Игра на реальные средства"}
-                    </div>
-                  </div>
-                </div>
-              </Label>
-            </div>
-            {isDemoMode && demoSpinsLeft === 0 && (
-              <Button 
-                onClick={() => setDemoSpinsLeft(10)} 
-                size="sm"
-                variant="outline"
-                className="border-blue-400/50 text-blue-200 hover:bg-blue-500/20"
-              >
-                <Icon name="RotateCcw" size={16} className="mr-1" />
-                Перезапустить
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Reels Container - 5 reels like Crazy Monkey */}
-        <div className="relative mb-8">
-          <div className="absolute -inset-4 bg-gradient-to-r from-orange-600/30 via-yellow-500/40 to-orange-600/30 blur-2xl"></div>
-          
-          <div className="relative bg-gradient-to-br from-yellow-950 to-orange-950 rounded-2xl p-6 border-4 border-yellow-500 shadow-[0_0_40px_rgba(234,179,8,0.5)]">
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 px-6 py-2 rounded-full border-2 border-yellow-400">
-              <span className="text-white font-black text-lg drop-shadow-lg">🍌 CRAZY MONKEY 🍌</span>
-            </div>
-            
-            <div className="grid grid-cols-5 gap-3 mt-4">
-              {reels.map((symbol, index) => (
-                <div key={index} className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/30 to-orange-600/30 rounded-xl blur"></div>
-                  
+        {/* Основная область */}
+        <div className="p-3 sm:p-6">
+          {/* Барабаны */}
+          <div className="relative mb-4 sm:mb-6">
+            <div className="bg-gradient-to-b from-blue-950 to-blue-900 p-1.5 sm:p-2 rounded-lg sm:rounded-xl border-2 sm:border-4 border-blue-800 shadow-inner">
+              <div className="grid grid-cols-5 gap-1 sm:gap-2">
+                {reels.map((symbol, index) => (
                   <div
-                    className={`relative aspect-square bg-gradient-to-br from-amber-700 via-yellow-800 to-orange-800 rounded-xl border-3 border-yellow-400/60 flex items-center justify-center text-7xl shadow-xl transition-all duration-300 ${
-                      isSpinning ? 'animate-bounce' : 'animate-scale-in'
+                    key={index}
+                    className={`aspect-square bg-gradient-to-b from-slate-200 to-slate-100 rounded border-2 sm:border-4 border-slate-300 flex items-center justify-center shadow-lg ${
+                      isSpinning ? 'animate-bounce' : ''
                     }`}
-                    style={{
-                      boxShadow: '0 0 25px rgba(234, 179, 8, 0.4), inset 0 3px 15px rgba(0,0,0,0.6)'
-                    }}
                   >
-                    <div className={`${isSpinning ? 'blur-md scale-50' : ''} transition-all duration-300`}>
+                    <span className={`text-3xl sm:text-5xl md:text-7xl ${isSpinning ? 'blur-sm' : ''} transition-all`}>
                       {symbol}
-                    </div>
+                    </span>
                   </div>
-
-                  <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-orange-600/80 backdrop-blur-sm px-2 py-1 rounded-full border-2 border-yellow-400/60">
-                    <span className="text-xs font-black text-yellow-100">{index + 1}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-transparent via-yellow-500 to-transparent h-2 w-4/5 rounded-full"></div>
-          </div>
-        </div>
-
-        {/* Bet Control */}
-        <div className="mb-6 p-6 bg-gradient-to-br from-orange-800/80 to-red-800/80 rounded-xl border-2 border-yellow-500/50 backdrop-blur-sm">
-          <div className="flex items-center justify-between mb-4">
-            <label className="text-yellow-300 font-bold flex items-center gap-2">
-              <Icon name="Coins" size={24} />
-              <span className="text-xl">Ставка</span>
-            </label>
-            <div className="text-right">
-              <div className="text-4xl font-black bg-gradient-to-r from-yellow-300 to-orange-400 bg-clip-text text-transparent drop-shadow-lg">
-                {bet.toLocaleString('ru-RU')} ₽
+                ))}
               </div>
             </div>
+
+            <div className="absolute -left-1 sm:-left-2 top-1/2 -translate-y-1/2 bg-yellow-500 text-slate-900 font-black px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-xs sm:text-sm">
+              {currentLine}
+            </div>
           </div>
-          
-          <Slider
-            value={[bet]}
-            onValueChange={(value) => setBet(value[0])}
-            min={10}
-            max={1000}
-            step={10}
-            className="mb-4"
-            disabled={isSpinning}
-          />
-          
-          <div className="grid grid-cols-5 gap-2">
-            {[10, 50, 100, 500, 1000].map((amount) => (
+
+          {/* Панель управления */}
+          <div className="bg-gradient-to-b from-slate-700 to-slate-800 rounded-lg sm:rounded-xl border-2 sm:border-4 border-slate-600 p-2 sm:p-4 mb-3 sm:mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3 mb-2 sm:mb-3">
+              <div className="bg-black rounded px-2 sm:px-3 py-1.5 sm:py-2 border border-red-600">
+                <div className="text-red-500 text-[10px] sm:text-xs font-bold">КРЕДИТ</div>
+                <div className="text-yellow-400 text-base sm:text-xl font-black">{balance}</div>
+              </div>
+
+              <div className="bg-black rounded px-2 sm:px-3 py-1.5 sm:py-2 border border-red-600">
+                <div className="text-red-500 text-[10px] sm:text-xs font-bold">СТАВКА</div>
+                <div className="text-yellow-400 text-base sm:text-xl font-black">{bet}</div>
+              </div>
+
+              <div className="bg-black rounded px-2 sm:px-3 py-1.5 sm:py-2 border border-red-600">
+                <div className="text-red-500 text-[10px] sm:text-xs font-bold">ЛИНИИ</div>
+                <div className="text-yellow-400 text-base sm:text-xl font-black">{currentLine}</div>
+              </div>
+
+              <div className="bg-black rounded px-2 sm:px-3 py-1.5 sm:py-2 border border-red-600">
+                <div className="text-red-500 text-[10px] sm:text-xs font-bold">ВСЕГО</div>
+                <div className="text-yellow-400 text-base sm:text-xl font-black">{totalBet}</div>
+              </div>
+            </div>
+
+            {/* Кнопки */}
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-2">
               <Button
-                key={amount}
-                onClick={() => setBet(amount)}
+                onClick={() => setBet(Math.max(1, bet - 1))}
                 disabled={isSpinning}
-                variant="outline"
-                className="border-yellow-400/70 hover:bg-yellow-500/30 text-yellow-200 hover:border-yellow-300 font-bold transition-all"
+                className="bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-black border-2 sm:border-4 border-red-900 shadow-lg py-4 sm:py-6 text-xs sm:text-base h-auto"
               >
-                {amount}
+                БЕТ -
               </Button>
-            ))}
+              
+              <Button
+                onClick={() => setBet(Math.min(10, bet + 1))}
+                disabled={isSpinning}
+                className="bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-black border-2 sm:border-4 border-red-900 shadow-lg py-4 sm:py-6 text-xs sm:text-base h-auto"
+              >
+                БЕТ +
+              </Button>
+
+              <Button
+                onClick={() => setCurrentLine(currentLine === 9 ? 1 : currentLine + 1)}
+                disabled={isSpinning}
+                className="bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white font-black border-2 sm:border-4 border-blue-900 shadow-lg py-4 sm:py-6 text-xs sm:text-base h-auto"
+              >
+                ЛИНИЯ
+              </Button>
+            </div>
+
+            <Button
+              onClick={spin}
+              disabled={isSpinning || (!isDemoMode && totalBet > balance) || (isDemoMode && demoSpinsLeft === 0)}
+              className="w-full bg-gradient-to-b from-green-600 to-green-800 hover:from-green-500 hover:to-green-700 text-white font-black text-lg sm:text-2xl border-2 sm:border-4 border-green-900 shadow-lg py-5 sm:py-7 animate-pulse h-auto"
+            >
+              {isSpinning ? 'КРУТИМ...' : 'СТАРТ'}
+            </Button>
           </div>
-        </div>
 
-        {/* Spin Button */}
-        <Button
-          onClick={spin}
-          disabled={isSpinning || (!isDemoMode && bet > balance) || (isDemoMode && demoSpinsLeft === 0)}
-          className="w-full bg-gradient-to-r from-red-600 via-orange-500 to-yellow-500 hover:from-red-500 hover:via-orange-400 hover:to-yellow-400 text-white font-black text-3xl py-12 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_40px_rgba(239,68,68,0.6)] hover:shadow-[0_0_50px_rgba(239,68,68,0.8)] transition-all duration-300 rounded-xl border-4 border-yellow-300 animate-pulse"
-          style={{ fontFamily: 'Playfair Display, serif' }}
-        >
-          {isSpinning ? (
-            <span className="flex items-center gap-3">
-              <Icon name="Loader2" size={32} className="animate-spin" />
-              ВРАЩЕНИЕ...
-            </span>
-          ) : (
-            <span className="flex items-center gap-3">
-              <div className="text-4xl">🐵</div>
-              КРУТИТЬ
-              {isDemoMode ? ` (DEMO)` : ` (${bet.toLocaleString('ru-RU')} ₽)`}
-              <div className="text-4xl">🍌</div>
-            </span>
-          )}
-        </Button>
+          {/* Режим */}
+          <div className="bg-slate-800 rounded-lg p-2 sm:p-3 border border-slate-600 mb-3 sm:mb-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <button
+                onClick={toggleMode}
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded font-bold text-xs sm:text-base ${
+                  isDemoMode ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
+                }`}
+              >
+                {isDemoMode ? `ДЕМО (${demoSpinsLeft})` : 'РЕАЛЬНЫЙ'}
+              </button>
+              {isDemoMode && demoSpinsLeft === 0 && (
+                <button 
+                  onClick={() => setDemoSpinsLeft(10)}
+                  className="px-2 sm:px-3 py-1 bg-blue-500 text-white rounded text-xs sm:text-sm font-bold"
+                >
+                  Обновить
+                </button>
+              )}
+            </div>
+          </div>
 
-        {/* Paytable - Crazy Monkey style */}
-        <div className="mt-6 p-5 bg-gradient-to-br from-green-900/70 to-yellow-900/70 rounded-xl border-2 border-yellow-500/40 backdrop-blur-sm">
-          <h3 className="text-yellow-300 font-black mb-4 flex items-center gap-2 text-xl">
-            <Icon name="Trophy" size={22} />
-            ТАБЛИЦА ВЫПЛАТ
-          </h3>
-          <div className="space-y-2">
-            <div className="flex justify-between items-center p-3 bg-red-600/30 rounded-lg border-2 border-yellow-500/40">
-              <span className="text-white font-bold">🐵 x5 CRAZY JACKPOT</span>
-              <span className="text-yellow-300 font-black text-xl">x500</span>
-            </div>
-            <div className="flex justify-between items-center p-2 bg-orange-800/40 rounded-lg border border-yellow-500/30">
-              <span className="text-yellow-100">🍌 x5 Бананы</span>
-              <span className="text-yellow-300 font-bold text-lg">x200</span>
-            </div>
-            <div className="flex justify-between items-center p-2 bg-orange-800/40 rounded-lg border border-yellow-500/30">
-              <span className="text-yellow-100">💎 x5 Алмазы</span>
-              <span className="text-yellow-300 font-bold">x150</span>
-            </div>
-            <div className="flex justify-between items-center p-2 bg-green-800/40 rounded-lg border border-green-500/30">
-              <span className="text-green-100">🐵 x3 Бонусная игра!</span>
-              <span className="text-green-300 font-bold">БОНУС!</span>
-            </div>
-            <div className="flex justify-between items-center p-2 bg-slate-800/40 rounded-lg">
-              <span className="text-slate-200 text-sm">x4 одинаковых</span>
-              <span className="text-yellow-400 font-bold">x25-100</span>
-            </div>
-            <div className="flex justify-between items-center p-2 bg-slate-800/40 rounded-lg">
-              <span className="text-slate-200 text-sm">x3 одинаковых</span>
-              <span className="text-yellow-400 font-bold">x5-25</span>
+          {/* Таблица */}
+          <div className="bg-slate-900 rounded-lg p-2 sm:p-3 border border-yellow-600">
+            <div className="text-yellow-400 font-black text-xs sm:text-sm mb-1.5 sm:mb-2">ВЫПЛАТЫ:</div>
+            <div className="grid grid-cols-2 gap-0.5 sm:gap-1 text-[10px] sm:text-sm text-white">
+              <div>🐵×5=×200</div>
+              <div>💎×5=×100</div>
+              <div>🍌×5=×80</div>
+              <div>🥥×5=×50</div>
+              <div className="col-span-2 text-center text-green-400 font-bold text-xs sm:text-sm mt-1">🐵×3=БОНУС</div>
             </div>
           </div>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
