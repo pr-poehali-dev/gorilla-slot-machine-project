@@ -47,18 +47,18 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-green-900 via-yellow-900 to-orange-900">
       {/* Header */}
-      <header className="border-b border-yellow-600/30 bg-slate-900/80 backdrop-blur-sm">
+      <header className="border-b border-yellow-500/50 bg-green-900/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="text-4xl">🦍</div>
+              <div className="text-4xl animate-bounce">🐵</div>
               <div>
-                <h1 className="text-3xl font-bold text-yellow-500" style={{ fontFamily: 'Playfair Display, serif' }}>
-                  Gorilla Gold
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  Crazy Monkey
                 </h1>
-                <p className="text-sm text-slate-400">Классическое казино</p>
+                <p className="text-sm text-yellow-300">Легендарный игровой автомат</p>
               </div>
             </div>
             <div className="text-right">
@@ -102,10 +102,11 @@ const Index = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-yellow-600/30 bg-slate-900/80 backdrop-blur-sm mt-16 py-8">
-        <div className="container mx-auto px-4 text-center text-slate-400 text-sm">
-          <p>🔞 Только для лиц старше 18 лет</p>
+      <footer className="border-t border-yellow-500/50 bg-green-900/80 backdrop-blur-sm mt-16 py-8">
+        <div className="container mx-auto px-4 text-center text-yellow-200 text-sm">
+          <p className="font-bold">🔞 Только для лиц старше 18 лет</p>
           <p className="mt-2">Игра в демо-режиме с виртуальными фишками</p>
+          <p className="mt-1 text-yellow-300/70">🐵 Crazy Monkey - Легендарный игровой автомат 🍌</p>
         </div>
       </footer>
     </div>
